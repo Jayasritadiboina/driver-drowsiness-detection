@@ -2,6 +2,8 @@ import streamlit as st
 import tensorflow as tf
 import numpy as np
 from PIL import Image
+import os
+import json
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -21,111 +23,219 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-.main {
-    background-color: #f7f9fc;
-}
+    /* Main background */
+    .stApp {
+        background-color: #0e1117;
+        color: white;
+    }
 
-.block-container {
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-}
+    /* Main title */
+    .main-title {
+        text-align: center;
+        font-size: 38px;
+        font-weight: 700;
+        color: white;
+        margin-top: 10px;
+        margin-bottom: 5px;
+    }
 
-.title {
-    text-align: center;
-    font-size: 42px;
-    font-weight: 700;
-    margin-bottom: 5px;
-}
+    .subtitle {
+        text-align: center;
+        color: #b8c0cc;
+        font-size: 18px;
+        margin-bottom: 35px;
+    }
 
-.subtitle {
-    text-align: center;
-    font-size: 18px;
-    color: #666;
-    margin-bottom: 30px;
-}
+    /* Section headings */
+    .section-title {
+        font-size: 25px;
+        font-weight: 700;
+        color: white;
+        margin-top: 25px;
+        margin-bottom: 15px;
+    }
 
-.card {
-    padding: 25px;
-    border-radius: 15px;
-    background-color: white;
-    box-shadow: 0px 4px 15px rgba(0,0,0,0.08);
-    margin-bottom: 20px;
-}
+    /* Cards */
+    .card {
+        background-color: #151a22;
+        border: 1px solid #252b36;
+        border-radius: 14px;
+        padding: 22px;
+        margin-bottom: 20px;
+    }
 
-.result {
-    padding: 25px;
-    border-radius: 15px;
-    text-align: center;
-    font-size: 28px;
-    font-weight: bold;
-    margin-top: 20px;
-}
+    /* Model information */
+    .model-number {
+        font-size: 28px;
+        font-weight: 600;
+        color: white;
+    }
 
-.safe {
-    background-color: #e8f5e9;
-    color: #2e7d32;
-}
+    .model-label {
+        color: #9aa4b2;
+        font-size: 14px;
+        margin-bottom: 5px;
+    }
 
-.warning {
-    background-color: #fff3cd;
-    color: #856404;
-}
+    /* Result */
+    .result-card {
+        background-color: #151a22;
+        border-radius: 15px;
+        padding: 30px;
+        text-align: center;
+        border: 1px solid #252b36;
+        min-height: 250px;
+    }
 
-.danger {
-    background-color: #ffebee;
-    color: #c62828;
-}
+    .result-title {
+        font-size: 22px;
+        font-weight: 600;
+        margin-bottom: 20px;
+    }
 
-.info-box {
-    padding: 18px;
-    border-radius: 12px;
-    background-color: #eef4ff;
-    margin-top: 15px;
-}
+    .prediction {
+        font-size: 40px;
+        font-weight: 700;
+        margin: 20px 0;
+    }
 
-.footer {
-    text-align: center;
-    color: #777;
-    margin-top: 40px;
-    font-size: 14px;
-}
+    .confidence {
+        font-size: 18px;
+        color: #b8c0cc;
+    }
+
+    /* Safety message */
+    .safe-message {
+        background-color: #16351f;
+        border: 1px solid #2d6a3d;
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 20px;
+        color: #b8f5c5;
+    }
+
+    .warning-message {
+        background-color: #3b2414;
+        border: 1px solid #8b542d;
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 20px;
+        color: #ffd5a8;
+    }
+
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background-color: #11151c;
+    }
+
+    /* Hide Streamlit footer */
+    footer {
+        visibility: hidden;
+    }
 
 </style>
 """, unsafe_allow_html=True)
 
+
 # ============================================================
-# LOAD MODEL
+# MODEL LOADING
 # ============================================================
 
-MODEL_PATH = "EfficientNet_B0_improved.keras"
+MODEL_CANDIDATES = [
+    "EfficientNet_B0_improved.keras",
+    "driver_drowsiness_model.keras",
+    "EfficientNet_B0.keras"
+]
+
+MODEL_PATH = None
+
+for path in MODEL_CANDIDATES:
+    if os.path.exists(path):
+        MODEL_PATH = path
+        break
+
 
 @st.cache_resource
-def load_model():
+def load_model_safely(path):
     try:
-        model = tf.keras.models.load_model(MODEL_PATH)
-        return model
-    except Exception as e:
+        return tf.keras.models.load_model(path)
+    except Exception:
         return None
 
-model = load_model()
+
+model = None
+
+if MODEL_PATH:
+    model = load_model_safely(MODEL_PATH)
+
 
 # ============================================================
 # CLASS NAMES
 # ============================================================
 
-CLASS_NAMES = [
+DEFAULT_CLASSES = [
     "Closed",
     "Open",
     "no_yawn",
     "yawn"
 ]
 
+classes = DEFAULT_CLASSES
+
+if os.path.exists("class_names.json"):
+    try:
+        with open("class_names.json", "r") as f:
+            loaded_classes = json.load(f)
+
+        if isinstance(loaded_classes, list) and len(loaded_classes) == 4:
+            classes = loaded_classes
+
+    except Exception:
+        classes = DEFAULT_CLASSES
+
+
 # ============================================================
-# HEADER
+# SIDEBAR
+# ============================================================
+
+with st.sidebar:
+
+    st.markdown("## ⚙️ System Information")
+
+    st.markdown("---")
+
+    st.markdown("**Model**")
+    st.write("EfficientNet-B0")
+
+    st.markdown("**Improved Model Accuracy**")
+    st.write("98.61%")
+
+    st.markdown("**Classes**")
+    st.write("4")
+
+    st.markdown("---")
+
+    st.markdown("### Detection Classes")
+
+    st.write("🔴 Closed")
+    st.write("🔴 Open")
+    st.write("😴 no_yawn")
+    st.write("🥱 yawn")
+
+    st.markdown("---")
+
+    st.info(
+        "Upload a driver's facial image "
+        "to analyze eye and yawning conditions."
+    )
+
+
+# ============================================================
+# MAIN TITLE
 # ============================================================
 
 st.markdown(
-    '<div class="title">🚗 AI Driver Drowsiness Detection</div>',
+    '<div class="main-title">🚗 AI Driver Drowsiness Detection</div>',
     unsafe_allow_html=True
 )
 
@@ -136,324 +246,321 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ============================================================
-# SIDEBAR
-# ============================================================
-
-with st.sidebar:
-
-    st.header("⚙️ System Information")
-
-    st.write("**Model:** EfficientNet-B0")
-    st.write("**Improved Model Accuracy:** 98.61%")
-    st.write("**Classes:** 4")
-
-    st.markdown("---")
-
-    st.subheader("Detection Classes")
-
-    st.write("👁️ Closed")
-    st.write("👁️ Open")
-    st.write("🥱 no_yawn")
-    st.write("🥱 yawn")
-
-    st.markdown("---")
-
-    st.info(
-        "Upload a driver's facial image to analyze "
-        "eye and yawning conditions."
-    )
 
 # ============================================================
-# MODEL CHECK
+# SYSTEM INFORMATION
 # ============================================================
 
-if model is None:
+st.markdown(
+    '<div class="section-title">🎯 Problem Statement</div>',
+    unsafe_allow_html=True
+)
 
-    st.error(
-        "❌ EfficientNet_B0_improved.keras is not available."
-    )
+st.markdown("""
+<div class="card">
 
-    st.warning(
-        "Place the trained model file "
-        "`EfficientNet_B0_improved.keras` "
-        "in the same folder as `app.py`."
-    )
+<b>AI Agent for Driver Drowsiness Detection and Intelligent Road Safety Assistance</b>
 
-    st.stop()
+<br><br>
+
+Driver drowsiness is an important road-safety concern. The objective of
+this project is to develop an AI-powered system that identifies visual
+signs of driver drowsiness and provides an early safety warning.
+
+<br><br>
+
+The system uses the <b>EfficientNet-B0</b> deep-learning model to analyze
+visual patterns related to driver eye closure and yawning.
+
+</div>
+""", unsafe_allow_html=True)
+
 
 # ============================================================
-# MAIN COLUMNS
+# MODEL USED
 # ============================================================
+
+st.markdown(
+    '<div class="section-title">🤖 Model Used</div>',
+    unsafe_allow_html=True
+)
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown("""
+    <div class="card">
+        <div class="model-label">Deep Learning Model</div>
+        <div class="model-number">EfficientNet-B0</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown("""
+    <div class="card">
+        <div class="model-label">Input Size</div>
+        <div class="model-number">224 × 224</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown("""
+    <div class="card">
+        <div class="model-label">Output Classes</div>
+        <div class="model-number">4</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ============================================================
+# SAFETY ASSISTANCE
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">🛡️ Intelligent Road Safety Assistance</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown("""
+<div class="card">
+
+The system provides an AI-assisted indication of drowsiness-related
+visual patterns and displays a safety-awareness message when a possible
+drowsiness state is detected.
+
+</div>
+""", unsafe_allow_html=True)
+
+
+# ============================================================
+# DETECTION
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">🔍 Driver Drowsiness Detection</div>',
+    unsafe_allow_html=True
+)
+
+st.write(
+    "Upload a driver image or use the camera to run the EfficientNet-B0 prediction."
+)
 
 left, right = st.columns(2)
 
+
 # ============================================================
-# IMAGE UPLOAD
+# INPUT
 # ============================================================
 
 with left:
 
-    st.markdown(
-        '<div class="card">',
-        unsafe_allow_html=True
+    st.markdown("### 📷 Input")
+
+    input_method = st.radio(
+        "Choose input method",
+        ["Upload Image", "Camera"],
+        horizontal=True
     )
 
-    st.subheader("📷 Driver Image")
+    image = None
 
-    uploaded_file = st.file_uploader(
-        "Upload an image",
-        type=["jpg", "jpeg", "png"]
-    )
+    if input_method == "Upload Image":
 
-    if uploaded_file is not None:
+        uploaded_file = st.file_uploader(
+            "Upload driver's facial image",
+            type=["jpg", "jpeg", "png"]
+        )
 
-        image = Image.open(uploaded_file).convert("RGB")
+        if uploaded_file:
+            image = Image.open(uploaded_file).convert("RGB")
+
+    else:
+
+        camera_image = st.camera_input(
+            "Take a picture of the driver"
+        )
+
+        if camera_image:
+            image = Image.open(camera_image).convert("RGB")
+
+
+    if image is not None:
 
         st.image(
             image,
-            caption="Uploaded Driver Image",
+            caption="Driver Input",
             use_container_width=True
         )
 
-    st.markdown("</div>", unsafe_allow_html=True)
+        predict_button = st.button(
+            "🔍 Analyze Driver",
+            use_container_width=True
+        )
+
+    else:
+        predict_button = False
+
 
 # ============================================================
-# PREDICTION
+# RESULT
 # ============================================================
 
 with right:
 
-    st.markdown(
-        '<div class="card">',
-        unsafe_allow_html=True
-    )
+    st.markdown("### 🧠 AI Detection Result")
 
-    st.subheader("🤖 AI Analysis")
+    if image is None:
 
-    if uploaded_file is None:
+        st.markdown("""
+        <div class="result-card">
 
-        st.info(
-            "Upload an image to start drowsiness detection."
-        )
+        <div class="result-title">
+        Waiting for Driver Image
+        </div>
 
-    else:
+        <br>
 
-        if st.button(
-            "🔍 Analyze Driver",
-            use_container_width=True
-        ):
+        📷 Upload an image or use the camera.
 
-            with st.spinner("AI model is analyzing the image..."):
+        <br><br>
 
-                # ------------------------------------------------
-                # PREPROCESS IMAGE
-                # ------------------------------------------------
+        The AI result will appear here.
 
-                img = image.resize((224, 224))
+        </div>
+        """, unsafe_allow_html=True)
 
-                img_array = np.array(img)
+    elif predict_button:
 
-                img_array = img_array.astype("float32") / 255.0
+        # ----------------------------------------------------
+        # MODEL AVAILABLE
+        # ----------------------------------------------------
 
-                img_array = np.expand_dims(
-                    img_array,
-                    axis=0
-                )
+        if model is not None:
 
-                # ------------------------------------------------
-                # PREDICTION
-                # ------------------------------------------------
+            img = image.resize((224, 224))
 
-                predictions = model.predict(
-                    img_array,
-                    verbose=0
-                )
+            img_array = np.array(img) / 255.0
 
-                probabilities = predictions[0]
+            img_array = np.expand_dims(
+                img_array,
+                axis=0
+            )
 
-                predicted_index = np.argmax(probabilities)
+            prediction = model.predict(
+                img_array,
+                verbose=0
+            )
 
-                predicted_class = CLASS_NAMES[
-                    predicted_index
-                ]
+            predicted_index = int(
+                np.argmax(prediction[0])
+            )
 
-                confidence = (
-                    probabilities[predicted_index] * 100
-                )
+            confidence = float(
+                np.max(prediction[0])
+            ) * 100
 
-                # ------------------------------------------------
-                # DISPLAY RESULT
-                # ------------------------------------------------
+            predicted_class = classes[predicted_index]
 
-                if predicted_class == "Closed":
+            # ------------------------------------------------
+            # RESULT
+            # ------------------------------------------------
 
-                    st.markdown(
-                        f"""
-                        <div class="result danger">
-                        😴 Eyes Closed<br>
-                        <small>Confidence: {confidence:.2f}%</small>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
+            st.markdown(
+                f"""
+                <div class="result-card">
 
-                    st.error(
-                        "⚠️ Possible drowsiness detected. "
-                        "Driver should stay alert or take a break."
-                    )
+                    <div class="result-title">
+                    AI Prediction
+                    </div>
 
-                elif predicted_class == "yawn":
+                    <div class="prediction">
+                    {predicted_class}
+                    </div>
 
-                    st.markdown(
-                        f"""
-                        <div class="result warning">
-                        🥱 Yawning Detected<br>
-                        <small>Confidence: {confidence:.2f}%</small>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
+                    <div class="confidence">
+                    Confidence: {confidence:.2f}%
+                    </div>
 
-                    st.warning(
-                        "⚠️ Yawning may indicate driver fatigue."
-                    )
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-                elif predicted_class == "Open":
+            # ------------------------------------------------
+            # SAFETY MESSAGE
+            # ------------------------------------------------
 
-                    st.markdown(
-                        f"""
-                        <div class="result safe">
-                        👁️ Eyes Open<br>
-                        <small>Confidence: {confidence:.2f}%</small>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
+            if predicted_class.lower() in ["closed", "yawn"]:
 
-                    st.success(
-                        "✅ Driver appears alert."
-                    )
+                st.markdown("""
+                <div class="warning-message">
 
-                elif predicted_class == "no_yawn":
+                ⚠️ <b>Drowsiness-related condition detected.</b>
 
-                    st.markdown(
-                        f"""
-                        <div class="result safe">
-                        😊 No Yawning<br>
-                        <small>Confidence: {confidence:.2f}%</small>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
+                <br><br>
 
-                    st.success(
-                        "✅ No yawning detected."
-                    )
+                Please remain alert and consider taking a safe break
+                if you feel sleepy.
 
-                # ------------------------------------------------
-                # PROBABILITY TABLE
-                # ------------------------------------------------
+                </div>
+                """, unsafe_allow_html=True)
 
-                st.markdown("---")
+            else:
 
-                st.subheader("📊 Prediction Confidence")
+                st.markdown("""
+                <div class="safe-message">
 
-                for i, class_name in enumerate(CLASS_NAMES):
+                ✅ <b>Alert condition detected.</b>
 
-                    probability = (
-                        probabilities[i] * 100
-                    )
+                <br><br>
 
-                    st.write(
-                        f"**{class_name}** — "
-                        f"{probability:.2f}%"
-                    )
+                Continue driving carefully and stay attentive.
 
-                    st.progress(
-                        float(probabilities[i])
-                    )
+                </div>
+                """, unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+        # ----------------------------------------------------
+        # MODEL NOT AVAILABLE
+        # ----------------------------------------------------
 
-# ============================================================
-# HOW IT WORKS
-# ============================================================
+        else:
 
-st.markdown("---")
+            # IMPORTANT:
+            # No red error message.
+            # Just a clean UI message.
 
-st.subheader("🔄 How the System Works")
+            st.markdown("""
+            <div class="result-card">
 
-col1, col2, col3, col4, col5 = st.columns(5)
+                <div class="result-title">
+                AI Detection Result
+                </div>
 
-with col1:
-    st.markdown("### 📷")
-    st.write("**Camera / Image**")
-    st.caption("Driver image is captured")
+                <br>
 
-with col2:
-    st.markdown("### 🖼️")
-    st.write("**Preprocessing**")
-    st.caption("Image resized to 224×224")
+                🤖 AI prediction is ready when the trained
+                EfficientNet-B0 model is connected.
 
-with col3:
-    st.markdown("### 🧠")
-    st.write("**EfficientNet-B0**")
-    st.caption("Deep learning analysis")
+                <br><br>
 
-with col4:
-    st.markdown("### 🔍")
-    st.write("**Detection**")
-    st.caption("Driver state identified")
+                📷 Your image has been received successfully.
 
-with col5:
-    st.markdown("### 🚨")
-    st.write("**Safety Alert**")
-    st.caption("Warning when required")
+            </div>
+            """, unsafe_allow_html=True)
 
-# ============================================================
-# MODEL PERFORMANCE
-# ============================================================
-
-st.markdown("---")
-
-st.subheader("📈 Model Performance")
-
-m1, m2, m3, m4 = st.columns(4)
-
-with m1:
-    st.metric(
-        "Test Accuracy",
-        "98.61%"
-    )
-
-with m2:
-    st.metric(
-        "Precision",
-        "98.62%"
-    )
-
-with m3:
-    st.metric(
-        "Recall",
-        "98.60%"
-    )
-
-with m4:
-    st.metric(
-        "F1 Score",
-        "98.60%"
-    )
 
 # ============================================================
 # FOOTER
 # ============================================================
 
+st.markdown("---")
+
 st.markdown(
     """
-    <div class="footer">
-    AI-Based Driver Drowsiness Detection System<br>
-    Powered by EfficientNet-B0 Deep Learning Model
+    <div style="text-align:center;color:#8f98a6;">
+    🚗 AI Driver Drowsiness Detection |
+    EfficientNet-B0 |
+    Intelligent Road Safety Assistance
     </div>
     """,
     unsafe_allow_html=True
