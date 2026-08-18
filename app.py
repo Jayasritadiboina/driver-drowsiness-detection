@@ -43,18 +43,22 @@ st.markdown("""
 
 .block-container {
     max-width: 1200px;
-    padding: 1rem 2rem 3rem;
+    padding: 2rem 2rem 3rem !important;
 }
+
 
 /* Main title */
 
 .main-title {
     text-align: center;
-    font-size: 26px;
+    font-size: 40px;
     font-weight: 800;
     color: white;
-    margin-bottom: 18px;
+    line-height: 1.25;
+    margin-top: 0;
+    margin-bottom: 35px;
 }
+
 
 /* White separator */
 
